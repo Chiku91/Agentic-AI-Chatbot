@@ -1,5 +1,6 @@
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+import json
 
 
 class DisplayResultStreamlit:
@@ -13,31 +14,34 @@ class DisplayResultStreamlit:
         graph = self.graph
         user_message = self.user_message
 
+        # Prepare input
+        initial_state = {"messages": [HumanMessage(content=user_message)]}
+        st.chat_message("user").write(user_message)
+
         if usecase == "Basic Chatbot":
-            for event in graph.stream({"messages": ("user", user_message)}):
+            for event in graph.stream(initial_state):
                 for value in event.values():
                     for msg in value.get("messages", []):
-                        if isinstance(msg, HumanMessage):
-                            with st.chat_message("user"):
-                                st.write(msg.content)
-                        elif isinstance(msg, AIMessage):
+                        if isinstance(msg, AIMessage):
                             with st.chat_message("assistant"):
                                 st.write(msg.content)
 
         elif usecase == "Chatbot With Web":
-            # Prepare state and invoke the graph
-            initial_state = {"messages": [HumanMessage(content=user_message)]}
             res = graph.invoke(initial_state)
-
             for message in res.get('messages', []):
-                if isinstance(message, HumanMessage):
-                    with st.chat_message("user"):
-                        st.write(message.content)
-                elif isinstance(message, ToolMessage):
+                if isinstance(message, ToolMessage):
                     with st.chat_message("ai"):
-                        st.write("🔧 Tool Call Start")
-                        st.write(message.content)
-                        st.write("🔧 Tool Call End")
+                        st.markdown("🔧 **Tool Call Start**")
+                        try:
+                            results = json.loads(message.content)
+                            for result in results:
+                                st.markdown(f"🔹 **[{result['title']}]({result['url']})**")
+                                st.markdown(f"> {result['content'][:300]}...")  # Trim for readability
+                        except Exception as e:
+                            st.warning("Unable to parse tool output. Showing raw:")
+                            st.write(message.content)
+                        st.markdown("🔧 **Tool Call End**")
+
                 elif isinstance(message, AIMessage):
                     with st.chat_message("assistant"):
                         st.write(message.content)
